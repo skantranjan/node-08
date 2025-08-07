@@ -454,6 +454,97 @@ async function checkSkuCodeExists(skuCode) {
   return result.rows[0].count > 0;
 }
 
+/**
+ * Get all master data in one API call
+ * @returns {Promise<Object>} Object containing all master data
+ */
+async function getAllMasterData() {
+  try {
+    // Get all periods
+    const periodsQuery = `
+      SELECT id, period, is_active
+      FROM public.sdp_period
+      WHERE is_active = true
+      ORDER BY period;
+    `;
+    const periodsResult = await pool.query(periodsQuery);
+
+    // Get all regions
+    const regionsQuery = `
+      SELECT id, name
+      FROM public.sdp_region
+      ORDER BY name;
+    `;
+    const regionsResult = await pool.query(regionsQuery);
+
+    // Get all material types
+    const materialTypesQuery = `
+      SELECT id, item_name, item_order, is_active, created_by, created_date
+      FROM public.sdp_material_type
+      WHERE is_active = true
+      ORDER BY item_order, item_name;
+    `;
+    const materialTypesResult = await pool.query(materialTypesQuery);
+
+    // Get all component UOMs
+    const uomsQuery = `
+      SELECT id, item_name, item_order, is_active, created_by, created_date
+      FROM public.sdp_component_uom
+      WHERE is_active = true
+      ORDER BY item_order, item_name;
+    `;
+    const uomsResult = await pool.query(uomsQuery);
+
+    // Get all packaging materials
+    const packagingMaterialsQuery = `
+      SELECT id, item_name, item_order, is_active, created_by, created_date
+      FROM public.sdp_component_packaging_material
+      WHERE is_active = true
+      ORDER BY item_order, item_name;
+    `;
+    const packagingMaterialsResult = await pool.query(packagingMaterialsQuery);
+
+    // Get all packaging levels
+    const packagingLevelsQuery = `
+      SELECT id, item_name, item_order, is_active, created_by, created_date
+      FROM public.sdp_component_packaging_level
+      WHERE is_active = true
+      ORDER BY item_order, item_name;
+    `;
+    const packagingLevelsResult = await pool.query(packagingLevelsQuery);
+
+    // Get all component base UOMs
+    const baseUomsQuery = `
+      SELECT id, item_name, item_order, is_active, created_by, created_date
+      FROM public.sdp_component_base_uom
+      WHERE is_active = true
+      ORDER BY item_order, item_name;
+    `;
+    const baseUomsResult = await pool.query(baseUomsQuery);
+
+    return {
+      periods: periodsResult.rows,
+      regions: regionsResult.rows,
+      material_types: materialTypesResult.rows,
+      component_uoms: uomsResult.rows,
+      packaging_materials: packagingMaterialsResult.rows,
+      packaging_levels: packagingLevelsResult.rows,
+      component_base_uoms: baseUomsResult.rows,
+      total_count: {
+        periods: periodsResult.rows.length,
+        regions: regionsResult.rows.length,
+        material_types: materialTypesResult.rows.length,
+        component_uoms: uomsResult.rows.length,
+        packaging_materials: packagingMaterialsResult.rows.length,
+        packaging_levels: packagingLevelsResult.rows.length,
+        component_base_uoms: baseUomsResult.rows.length
+      }
+    };
+  } catch (error) {
+    throw error;
+  }
+}
+
 module.exports = {
   getActiveYears,
   getSkuDetailsByCMCode,
@@ -465,5 +556,6 @@ module.exports = {
   removeSkuFromComponentDetails,
   removeSkuFromAllComponentDetails,
   addSkuToSpecificComponents,
-  checkSkuCodeExists
+  checkSkuCodeExists,
+  getAllMasterData
 }; 

@@ -1,4 +1,4 @@
-const { getSkuDetailsByCMCode, getAllSkuDetails, updateIsActiveStatus, getActiveYears, getAllSkuDescriptions, updateSkuDetailBySkuCode, checkSkuCodeExists } = require('../models/model.getSkuDetails');
+const { getSkuDetailsByCMCode, getAllSkuDetails, updateIsActiveStatus, getActiveYears, getAllSkuDescriptions, updateSkuDetailBySkuCode, checkSkuCodeExists, getAllMasterData } = require('../models/model.getSkuDetails');
 const { insertSkuDetail } = require('../models/model.insertSkuDetail');
 const { getComponentDetailsByCode, insertComponentDetail, updateComponentSkuCode } = require('../models/model.componentOperations');
 
@@ -338,6 +338,28 @@ async function addSkuToSpecificComponents(skuCode, components) {
   }
 }
 
+/**
+ * Controller to get all master data in one API call
+ */
+async function getAllMasterDataController(request, reply) {
+  try {
+    const masterData = await getAllMasterData();
+    
+    reply.code(200).send({ 
+      success: true, 
+      message: 'Master data retrieved successfully',
+      data: masterData
+    });
+  } catch (error) {
+    request.log.error(error);
+    reply.code(500).send({ 
+      success: false, 
+      message: 'Failed to fetch master data', 
+      error: error.message 
+    });
+  }
+}
+
 module.exports = {
   getSkuDetailsByCMCodeController,
   getAllSkuDetailsController,
@@ -345,5 +367,6 @@ module.exports = {
   getActiveYearsController,
   getAllSkuDescriptionsController,
   insertSkuDetailController,
-  updateSkuDetailBySkuCodeController
+  updateSkuDetailBySkuCodeController,
+  getAllMasterDataController
 }; 

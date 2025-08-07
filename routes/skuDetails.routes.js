@@ -1,4 +1,4 @@
-const { getSkuDetailsByCMCodeController, getAllSkuDetailsController, updateIsActiveStatusController, getActiveYearsController, getAllSkuDescriptionsController, insertSkuDetailController, updateSkuDetailBySkuCodeController } = require('../controllers/controller.getSkuDetails');
+const { getSkuDetailsByCMCodeController, getAllSkuDetailsController, updateIsActiveStatusController, getActiveYearsController, getAllSkuDescriptionsController, insertSkuDetailController, updateSkuDetailBySkuCodeController, getAllMasterDataController } = require('../controllers/controller.getSkuDetails');
 const bearerTokenMiddleware = require('../middleware/middleware.bearer');
 
 async function skuDetailsRoutes(fastify, options) {
@@ -30,6 +30,11 @@ async function skuDetailsRoutes(fastify, options) {
   fastify.put('/sku-details/update/:sku_code', {
     preHandler: bearerTokenMiddleware
   }, updateSkuDetailBySkuCodeController);
+  
+  // Master Data API - Get all master data in one call
+  fastify.get('/masterdata', {
+    preHandler: bearerTokenMiddleware
+  }, getAllMasterDataController);
 }
 
 module.exports = skuDetailsRoutes; 
