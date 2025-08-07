@@ -1,4 +1,4 @@
-const { getSkuDetailsByCMCodeController, getAllSkuDetailsController, updateIsActiveStatusController, getActiveYearsController, getAllSkuDescriptionsController, insertSkuDetailController, updateSkuDetailBySkuCodeController, getAllMasterDataController } = require('../controllers/controller.getSkuDetails');
+const { getSkuDetailsByCMCodeController, getAllSkuDetailsController, updateIsActiveStatusController, getActiveYearsController, getAllSkuDescriptionsController, insertSkuDetailController, updateSkuDetailBySkuCodeController, getAllMasterDataController, getConsolidatedDashboardController, toggleUniversalStatusController } = require('../controllers/controller.getSkuDetails');
 const bearerTokenMiddleware = require('../middleware/middleware.bearer');
 
 async function skuDetailsRoutes(fastify, options) {
@@ -32,9 +32,19 @@ async function skuDetailsRoutes(fastify, options) {
   }, updateSkuDetailBySkuCodeController);
   
   // Master Data API - Get all master data in one call
-  fastify.get('/masterdata', {
+  fastify.get('/get-masterdata', {
     preHandler: bearerTokenMiddleware
   }, getAllMasterDataController);
+
+  // Consolidated Dashboard API - Get multiple data types in one call
+  fastify.get('/cm-dashboard/:cmCode', {
+    preHandler: bearerTokenMiddleware
+  }, getConsolidatedDashboardController);
+
+  // Universal Status Toggle API - Handle both SKU and Component status changes
+  fastify.patch('/toggle-status', {
+    preHandler: bearerTokenMiddleware
+  }, toggleUniversalStatusController);
 }
 
 module.exports = skuDetailsRoutes; 

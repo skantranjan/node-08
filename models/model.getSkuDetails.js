@@ -545,6 +545,243 @@ async function getAllMasterData() {
   }
 }
 
+/**
+ * Get consolidated dashboard data for a CM code
+ * @param {string} cmCode - The CM code
+ * @param {Object} options - Query options
+ * @returns {Promise<Object>} Consolidated dashboard data
+ */
+async function getConsolidatedDashboardData(cmCode, options = {}) {
+  try {
+    const {
+      include = [],
+      period,
+      search,
+      component_id
+    } = options;
+
+    const result = {};
+
+    // Helper function to safely execute queries
+    const safeQuery = async (queryFn, key) => {
+      try {
+        if (include.includes(key)) {
+          result[key] = await queryFn();
+        }
+      } catch (error) {
+        console.error(`Error fetching ${key}:`, error.message);
+        result[key] = { error: error.message };
+      }
+    };
+
+    // 1. Get SKU details for CM
+    await safeQuery(async () => {
+      const query = `
+        SELECT id, sku_code, site, sku_description, cm_code, cm_description, sku_reference, 
+               is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, 
+               formulation_reference, dual_source_sku, skutype, bulk_expert
+        FROM public.sdp_skudetails
+        WHERE cm_code = $1 AND is_active = true
+        ORDER BY id DESC;
+      `;
+      const skuResult = await pool.query(query, [cmCode]);
+      return skuResult.rows;
+    }, 'skus');
+
+    // 2. Get SKU descriptions for dropdowns
+    await safeQuery(async () => {
+      const query = `
+        SELECT DISTINCT sku_description, cm_code
+        FROM public.sdp_skudetails
+        WHERE is_active = true
+        ORDER BY sku_description;
+      `;
+      const descResult = await pool.query(query);
+      return descResult.rows;
+    }, 'descriptions');
+
+    // 3. Get SKU references based on period and search
+    await safeQuery(async () => {
+      let query = `
+        SELECT DISTINCT sku_code, sku_description
+        FROM public.sdp_skudetails
+        WHERE is_active = true
+      `;
+      const values = [];
+      let paramIndex = 1;
+
+      if (period) {
+        query += ` AND period = $${paramIndex++}`;
+        values.push(period);
+      }
+
+      if (search) {
+        query += ` AND (sku_code ILIKE $${paramIndex++} OR sku_description ILIKE $${paramIndex++})`;
+        values.push(`%${search}%`);
+        values.push(`%${search}%`);
+      }
+
+      query += ` ORDER BY sku_code`;
+      const refResult = await pool.query(query, values);
+      return refResult.rows;
+    }, 'references');
+
+    // 4. Get component audit logs
+    await safeQuery(async () => {
+      if (!component_id) {
+        return [];
+      }
+      const query = `
+        SELECT id, component_id, action, details, created_by, created_date
+        FROM public.sdp_component_audit_log
+        WHERE component_id = $1
+        ORDER BY created_date DESC;
+      `;
+      const auditResult = await pool.query(query, [component_id]);
+      return auditResult.rows.map(row => ({
+        action: row.action,
+        timestamp: row.created_date,
+        details: row.details
+      }));
+    }, 'audit_logs');
+
+    // 5. Get component data by code
+    await safeQuery(async () => {
+      if (!component_id) {
+        return { components_with_evidence: [] };
+      }
+      const query = `
+        SELECT cd.*, ce.file_path, ce.file_name, ce.upload_date
+        FROM public.sdp_component_details cd
+        LEFT JOIN public.sdp_component_evidence ce ON cd.id = ce.component_id
+        WHERE cd.id = $1 AND cd.is_active = true
+        ORDER BY ce.upload_date DESC;
+      `;
+      const compResult = await pool.query(query, [component_id]);
+      
+      const components_with_evidence = [];
+      const componentMap = new Map();
+
+      compResult.rows.forEach(row => {
+        if (!componentMap.has(row.id)) {
+          componentMap.set(row.id, {
+            component_details: {
+              id: row.id,
+              sku_id: row.sku_id,
+              component_name: row.component_name,
+              material_type: row.material_type,
+              packaging_type: row.packaging_type,
+              weight: row.weight,
+              weight_uom: row.weight_uom,
+              is_active: row.is_active,
+              created_by: row.created_by,
+              created_date: row.created_date
+            },
+            evidence_files: []
+          });
+        }
+
+        if (row.file_path) {
+          componentMap.get(row.id).evidence_files.push({
+            file_path: row.file_path,
+            file_name: row.file_name,
+            upload_date: row.upload_date
+          });
+        }
+      });
+
+      return { components_with_evidence: Array.from(componentMap.values()) };
+    }, 'component_data');
+
+    // 6. Get master data (reuse existing function)
+    await safeQuery(async () => {
+      return await getAllMasterData();
+    }, 'master_data');
+
+    return result;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Universal status toggle function for SKU and Component
+ * @param {string} type - The type of item ('sku' or 'component')
+ * @param {number} id - The ID of the item
+ * @param {boolean} isActive - The new active status
+ * @returns {Promise<Object>} The updated item data
+ */
+async function toggleUniversalStatus(type, id, isActive) {
+  try {
+    // Validate type
+    if (!['sku', 'component'].includes(type)) {
+      throw new Error(`Invalid type: ${type}. Must be 'sku' or 'component'`);
+    }
+
+    // Validate id
+    if (!id || !Number.isInteger(Number(id)) || Number(id) <= 0) {
+      throw new Error(`Invalid ID: ${id}. Must be a positive integer`);
+    }
+
+    // Validate isActive
+    if (typeof isActive !== 'boolean') {
+      throw new Error(`Invalid is_active: ${isActive}. Must be a boolean`);
+    }
+
+    let result;
+
+         if (type === 'sku') {
+       // Update SKU status
+       const query = `
+         UPDATE public.sdp_skudetails 
+         SET is_active = $1
+         WHERE id = $2
+         RETURNING id, sku_code, sku_description, is_active, created_date;
+       `;
+       const skuResult = await pool.query(query, [isActive, id]);
+       
+       if (skuResult.rows.length === 0) {
+         throw new Error(`SKU with ID ${id} not found`);
+       }
+
+       result = {
+         id: skuResult.rows[0].id,
+         type: 'sku',
+         is_active: skuResult.rows[0].is_active,
+         updated_at: new Date().toISOString(),
+         sku_code: skuResult.rows[0].sku_code,
+         sku_description: skuResult.rows[0].sku_description
+       };
+
+         } else if (type === 'component') {
+       // Update Component status
+       const query = `
+         UPDATE public.sdp_component_details 
+         SET is_active = $1
+         WHERE id = $2
+         RETURNING id, component_code, component_description, is_active, created_date;
+       `;
+       const compResult = await pool.query(query, [isActive, id]);
+       
+       if (compResult.rows.length === 0) {
+         throw new Error(`Component with ID ${id} not found`);
+       }
+
+       result = {
+         id: compResult.rows[0].id,
+         type: 'component',
+         is_active: compResult.rows[0].is_active,
+         updated_at: new Date().toISOString(),
+         component_name: compResult.rows[0].component_code
+       };
+    }
+
+    return result;
+  } catch (error) {
+    throw error;
+  }
+}
+
 module.exports = {
   getActiveYears,
   getSkuDetailsByCMCode,
@@ -557,5 +794,7 @@ module.exports = {
   removeSkuFromAllComponentDetails,
   addSkuToSpecificComponents,
   checkSkuCodeExists,
-  getAllMasterData
+  getAllMasterData,
+  getConsolidatedDashboardData,
+  toggleUniversalStatus
 }; 

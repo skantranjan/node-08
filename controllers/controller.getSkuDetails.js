@@ -1,4 +1,4 @@
-const { getSkuDetailsByCMCode, getAllSkuDetails, updateIsActiveStatus, getActiveYears, getAllSkuDescriptions, updateSkuDetailBySkuCode, checkSkuCodeExists, getAllMasterData } = require('../models/model.getSkuDetails');
+const { getSkuDetailsByCMCode, getAllSkuDetails, updateIsActiveStatus, getActiveYears, getAllSkuDescriptions, updateSkuDetailBySkuCode, checkSkuCodeExists, getAllMasterData, getConsolidatedDashboardData, toggleUniversalStatus } = require('../models/model.getSkuDetails');
 const { insertSkuDetail } = require('../models/model.insertSkuDetail');
 const { getComponentDetailsByCode, insertComponentDetail, updateComponentSkuCode } = require('../models/model.componentOperations');
 
@@ -360,6 +360,183 @@ async function getAllMasterDataController(request, reply) {
   }
 }
 
+/**
+ * Controller to get consolidated dashboard data for a CM code
+ */
+async function getConsolidatedDashboardController(request, reply) {
+  try {
+    const { cmCode } = request.params;
+    const { 
+      include = '', 
+      period, 
+      search, 
+      component_id 
+    } = request.query;
+
+    // Validate CM code
+    if (!cmCode) {
+      return reply.code(400).send({
+        success: false,
+        message: 'CM code is required'
+      });
+    }
+
+    // Parse include parameter
+    const includeArray = include ? include.split(',').map(item => item.trim()) : [];
+
+    // Validate include parameters
+    const validIncludes = ['skus', 'descriptions', 'references', 'audit_logs', 'component_data', 'master_data'];
+    const invalidIncludes = includeArray.filter(item => !validIncludes.includes(item));
+    
+    if (invalidIncludes.length > 0) {
+      return reply.code(400).send({
+        success: false,
+        message: `Invalid include parameters: ${invalidIncludes.join(', ')}. Valid options: ${validIncludes.join(', ')}`
+      });
+    }
+
+    // Get consolidated data
+    const dashboardData = await getConsolidatedDashboardData(cmCode, {
+      include: includeArray,
+      period,
+      search,
+      component_id
+    });
+
+    // Log the request for debugging
+    console.log('=== CONSOLIDATED DASHBOARD REQUEST ===');
+    console.log('CM Code:', cmCode);
+    console.log('Include:', includeArray);
+    console.log('Period:', period);
+    console.log('Search:', search);
+    console.log('Component ID:', component_id);
+    console.log('Data Keys:', Object.keys(dashboardData));
+    console.log('=== END CONSOLIDATED DASHBOARD REQUEST ===');
+
+    reply.code(200).send({
+      success: true,
+      message: 'Consolidated dashboard data retrieved successfully',
+      data: dashboardData
+    });
+
+  } catch (error) {
+    console.error('Error in consolidated dashboard controller:', error);
+    reply.code(500).send({
+      success: false,
+      message: 'Failed to retrieve consolidated dashboard data',
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Controller for universal status toggle (SKU and Component)
+ */
+async function toggleUniversalStatusController(request, reply) {
+  try {
+    const { type, id, is_active } = request.body;
+
+    // Validate required fields
+    if (!type) {
+      return reply.code(400).send({
+        success: false,
+        message: 'Type is required',
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    if (!id) {
+      return reply.code(400).send({
+        success: false,
+        message: 'ID is required',
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    if (is_active === undefined || is_active === null) {
+      return reply.code(400).send({
+        success: false,
+        message: 'is_active is required',
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    // Validate type
+    if (!['sku', 'component'].includes(type)) {
+      return reply.code(400).send({
+        success: false,
+        message: `Invalid type provided. Must be 'sku' or 'component'`,
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    // Validate id
+    if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+      return reply.code(400).send({
+        success: false,
+        message: `Invalid ID: ${id}. Must be a positive integer`,
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    // Validate is_active
+    if (typeof is_active !== 'boolean') {
+      return reply.code(400).send({
+        success: false,
+        message: `Invalid is_active: ${is_active}. Must be a boolean`,
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    // Log the request for debugging
+    console.log('=== UNIVERSAL STATUS TOGGLE REQUEST ===');
+    console.log('Type:', type);
+    console.log('ID:', id);
+    console.log('Is Active:', is_active);
+    console.log('=== END UNIVERSAL STATUS TOGGLE REQUEST ===');
+
+    // Perform the status toggle
+    const result = await toggleUniversalStatus(type, id, is_active);
+
+    // Log the action for audit purposes
+    console.log(`Status change: ${type} ID ${id} set to ${is_active ? 'active' : 'inactive'}`);
+
+    reply.code(200).send({
+      success: true,
+      message: 'Status updated successfully',
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Error in universal status toggle controller:', error);
+    
+    // Handle specific error types
+    if (error.message.includes('not found')) {
+      return reply.code(404).send({
+        success: false,
+        message: error.message,
+        error: 'NOT_FOUND'
+      });
+    }
+
+    if (error.message.includes('Invalid type') || 
+        error.message.includes('Invalid ID') || 
+        error.message.includes('Invalid is_active')) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    reply.code(500).send({
+      success: false,
+      message: 'Failed to update status',
+      error: error.message
+    });
+  }
+}
+
 module.exports = {
   getSkuDetailsByCMCodeController,
   getAllSkuDetailsController,
@@ -368,5 +545,7 @@ module.exports = {
   getAllSkuDescriptionsController,
   insertSkuDetailController,
   updateSkuDetailBySkuCodeController,
-  getAllMasterDataController
+  getAllMasterDataController,
+  getConsolidatedDashboardController,
+  toggleUniversalStatusController
 }; 
