@@ -7,7 +7,7 @@ const pool = require('../config/db.config');
  */
 async function getSkuDetailsByReference(skuReference) {
   const query = `
-    SELECT id, sku_code, site, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, skutype
+    SELECT id, sku_code, site, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, skutype, bulk_expert
     FROM public.sdp_skudetails
     WHERE sku_reference = $1 AND is_active = true
     ORDER BY id DESC;
@@ -24,7 +24,7 @@ async function getSkuDetailsByReference(skuReference) {
  */
 async function getSkuDetailsByPeriodAndCm(period, cmCode) {
   const query = `
-    SELECT id, sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype
+    SELECT id, sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype, bulk_expert
     FROM public.sdp_skudetails
     WHERE period = $1 AND cm_code = $2 AND is_active = true
     ORDER BY id DESC;

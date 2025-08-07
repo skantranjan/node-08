@@ -1,4 +1,4 @@
-const { getSkuDetailsByCMCode, getAllSkuDetails, updateIsActiveStatus, getActiveYears, getAllSkuDescriptions, updateSkuDetailBySkuCode } = require('../models/model.getSkuDetails');
+const { getSkuDetailsByCMCode, getAllSkuDetails, updateIsActiveStatus, getActiveYears, getAllSkuDescriptions, updateSkuDetailBySkuCode, checkSkuCodeExists } = require('../models/model.getSkuDetails');
 const { insertSkuDetail } = require('../models/model.insertSkuDetail');
 const { getComponentDetailsByCode, insertComponentDetail, updateComponentSkuCode } = require('../models/model.componentOperations');
 
@@ -107,7 +107,7 @@ async function insertSkuDetailController(request, reply) {
     } = request.body;
 
     // Get skutype from query parameter if provided
-    const skutype = request.query.skutype || 'Default';
+    const skutype = request.query.skutype;
 
     // Log the incoming data from UI
     console.log('=== SKU ADDITION REQUEST DATA ===');
@@ -133,8 +133,19 @@ async function insertSkuDetailController(request, reply) {
       return reply.code(400).send({ success: false, message: 'A value is required for SKU description' });
     }
 
-    // Add skutype to sku_data
-    sku_data.skutype = skutype;
+    // Check if SKU code already exists
+    const skuExists = await checkSkuCodeExists(sku_data.sku_code);
+    if (skuExists) {
+      return reply.code(409).send({ 
+        success: false, 
+        message: `SKU code '${sku_data.sku_code}' already exists in the system` 
+      });
+    }
+
+    // Add skutype to sku_data only if provided
+    if (skutype) {
+      sku_data.skutype = skutype;
+    }
 
     // Insert SKU detail
     const insertedSku = await insertSkuDetail(sku_data);
@@ -212,6 +223,7 @@ async function updateSkuDetailBySkuCodeController(request, reply) {
       skutype, 
       site, 
       formulation_reference,
+      bulk_expert,
       components
     } = request.body;
     
@@ -228,13 +240,13 @@ async function updateSkuDetailBySkuCodeController(request, reply) {
     }
     
     // Check if at least one field is provided for update
-    const updateFields = { sku_description, sku_reference, skutype, site, formulation_reference };
+    const updateFields = { sku_description, sku_reference, skutype, site, formulation_reference, bulk_expert };
     const hasUpdateData = Object.values(updateFields).some(value => value !== undefined && value !== null);
     
     if (!hasUpdateData && (!components || components.length === 0)) {
       return reply.code(400).send({ 
         success: false, 
-        message: 'At least one field must be provided for update (sku_description, sku_reference, skutype, site, formulation_reference) or components array' 
+        message: 'At least one field must be provided for update (sku_description, sku_reference, skutype, site, formulation_reference, bulk_expert) or components array' 
       });
     }
     
@@ -245,6 +257,7 @@ async function updateSkuDetailBySkuCodeController(request, reply) {
     if (skutype !== undefined) data.skutype = skutype;
     if (site !== undefined) data.site = site;
     if (formulation_reference !== undefined) data.formulation_reference = formulation_reference;
+    if (bulk_expert !== undefined) data.bulk_expert = bulk_expert;
     
     const updated = await updateSkuDetailBySkuCode(sku_code, data);
     

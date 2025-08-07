@@ -7,7 +7,7 @@ const pool = require('../config/db.config');
  */
 async function getSkuDetailsByCMCode(cmCode) {
   const query = `
-    SELECT id, sku_code, site, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, skutype
+    SELECT id, sku_code, site, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, skutype, bulk_expert
     FROM public.sdp_skudetails
     WHERE cm_code = $1 AND is_active = true
     ORDER BY id DESC;
@@ -22,7 +22,7 @@ async function getSkuDetailsByCMCode(cmCode) {
  */
 async function getAllSkuDetails() {
   const query = `
-    SELECT id, sku_code, site, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, skutype
+    SELECT id, sku_code, site, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, skutype, bulk_expert
     FROM public.sdp_skudetails
     WHERE is_active = true
     ORDER BY id DESC;
@@ -85,9 +85,9 @@ async function getAllSkuDescriptions() {
 async function insertSkuDetail(data) {
   const query = `
     INSERT INTO public.sdp_skudetails (
-      sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype
-    ) VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    RETURNING id, sku_code, sku_description, cm_code, cm_description, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype;
+      sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype, bulk_expert
+    ) VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    RETURNING id, sku_code, sku_description, cm_code, cm_description, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype, bulk_expert;
   `;
   const values = [
     data.sku_code,
@@ -103,7 +103,8 @@ async function insertSkuDetail(data) {
     data.formulation_reference || null,
     data.dual_source_sku || null,
     data.site || null,
-    data.skutype || null
+    data.skutype || null,
+    data.bulk_expert || null
   ];
   const result = await pool.query(query, values);
   return result.rows[0];
@@ -146,6 +147,11 @@ async function updateSkuDetailBySkuCode(sku_code, data) {
     values.push(data.formulation_reference);
   }
   
+  if (data.bulk_expert !== undefined) {
+    updateFields.push(`bulk_expert = $${paramIndex++}`);
+    values.push(data.bulk_expert);
+  }
+  
   // Add WHERE condition
   values.push(sku_code);
   
@@ -153,7 +159,7 @@ async function updateSkuDetailBySkuCode(sku_code, data) {
     UPDATE public.sdp_skudetails SET
       ${updateFields.join(', ')}
     WHERE sku_code = $${paramIndex}
-    RETURNING id, sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype;
+    RETURNING id, sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype, bulk_expert;
   `;
   
   const result = await pool.query(query, values);
@@ -433,6 +439,21 @@ async function addSkuToSpecificComponents(skuCode, components) {
   return updatedComponents;
 }
 
+/**
+ * Check if SKU code already exists in sdp_skudetails
+ * @param {string} skuCode - The SKU code to check
+ * @returns {Promise<boolean>} True if exists, false otherwise
+ */
+async function checkSkuCodeExists(skuCode) {
+  const query = `
+    SELECT COUNT(*) as count
+    FROM public.sdp_skudetails
+    WHERE sku_code = $1;
+  `;
+  const result = await pool.query(query, [skuCode]);
+  return result.rows[0].count > 0;
+}
+
 module.exports = {
   getActiveYears,
   getSkuDetailsByCMCode,
@@ -443,5 +464,6 @@ module.exports = {
   updateSkuDetailBySkuCode,
   removeSkuFromComponentDetails,
   removeSkuFromAllComponentDetails,
-  addSkuToSpecificComponents
+  addSkuToSpecificComponents,
+  checkSkuCodeExists
 }; 

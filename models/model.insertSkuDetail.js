@@ -8,9 +8,9 @@ const pool = require('../config/db.config');
 async function insertSkuDetail(data) {
   const query = `
     INSERT INTO public.sdp_skudetails (
-      sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-    RETURNING id, sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype;
+      sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype, bulk_expert
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    RETURNING id, sku_code, sku_description, cm_code, cm_description, sku_reference, is_active, created_by, created_date, period, purchased_quantity, sku_reference_check, formulation_reference, dual_source_sku, site, skutype, bulk_expert;
   `;
   const values = [
     data.sku_code,
@@ -27,7 +27,8 @@ async function insertSkuDetail(data) {
     data.formulation_reference || null,
     data.dual_source_sku || null,
     data.site || null,
-    data.skutype || 'Default'  // Set default value if not provided
+    data.skutype || null,  // Only insert if provided
+    data.bulk_expert || null
   ];
   
   try {
@@ -38,6 +39,4 @@ async function insertSkuDetail(data) {
   }
 }
 
-module.exports = {
-  insertSkuDetail
-}; 
+module.exports = { insertSkuDetail }; 
